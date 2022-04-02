@@ -7,15 +7,17 @@
 # NUM_GPU=4
 # PORT_ID=$(expr $RANDOM + 1000)
 # export OMP_NUM_THREADS=8
-export CUDA_VISIBLE_DEVICES=2,3,4,5
-
+export CUDA_VISIBLE_DEVICES=4
+    # --prefix \
+    # --prefix_projection \
 python train.py \
     --model_name_or_path bert-base-uncased \
     --train_file data/wiki1m_for_simcse.txt \
-    --output_dir result/my-unsup-simcse-bert-base-uncased \
-    --num_train_epochs 1 \
+    --output_dir result/bert-base-uncased_prefix_wo_proj_33_len16 \
     --prefix \
-    --prefix_projection \
+    --pre_seq_len 16 \
+    --seed 33\
+    --num_train_epochs 1 \
     --per_device_train_batch_size 64 \
     --learning_rate 3e-5 \
     --max_seq_length 32 \

@@ -1,4 +1,6 @@
 from cProfile import label
+from curses import meta
+from turtle import forward
 from xml.parsers.expat import model
 import torch
 import torch.nn as nn
@@ -52,7 +54,83 @@ tokenizer_name=None, cache_dir=None, use_fast_tokenizer=True, model_revision='ma
   hard_negative_weight=0, do_mlm=False, mlm_weight=0.1, mlp_only_train=True)
 
 '''
+class MetaPrefixEncoder(torch.nn.Module):
+    r'''
+    The torch.nn model to encode the instance-wise and layer-wise meta-prefix.
+    '''
 
+    def __init__(self, config, **model_kwargs) -> None:
+        super().__init__()
+        self.model_args = model_kwargs['model_args']
+        self.config = config
+        # Layer embeddings
+        if self.model_args.layer_wise:
+            self.layer_embedding = torch.nn.Embedding(config.num_hidden_layers, self.model_args.layer_embed_size)
+        
+        # meta embedding encoder
+        self.meta_embed_net = torch.nn.Sequential(
+            torch.nn.Linear(config.hidden_size + self.model_args.layer_embed_size 
+                if self.model_args.layer_wise else config.hidden_size, self.model_args.meta_hidden_size),
+            torch.nn.Tanh(),
+            torch.nn.Linear(self.model_args.meta_hidden_size,  self.model_args.meta_embed_size)
+        )
+        # meta prefix encoder, input: meta embedding
+        self.meta_net = torch.nn.Sequential(
+            torch.nn.Linear(self.model_args.meta_embed_size, self.model_args.prefix_hidden_size),
+            torch.nn.Tanh(),
+            torch.nn.Linear(self.model_args.prefix_hidden_size, 2 * config.hidden_size * self.model_args.pre_seq_len 
+            if self.model_args.layer_wise else 2 * config.hidden_size * config.num_hidden_layers * self.model_args.pre_seq_len)
+            # 如果是只以avg作为meta embedding，那么需要投射到每一层（同样的输入，同样的输出），而如果是layer_wise，每一层的input都不同，因此只需要投射到该层的embedding length即可。
+        )
+    
+    def forward(self, **kwargs):
+        input_ids = kwargs["input_ids"]
+        cls = kwargs["cls"]
+        batch_size = input_ids.shape[0]
+        attention_mask = kwargs["attention_mask"]
+        encoder = kwargs["encoder"]
+        device = kwargs['device']
+        embedding_layer = encoder.get_input_embeddings() # model's embedding layer
+
+        input_embedding = embedding_layer(input_ids)
+        avg_input_embedding = (input_embedding * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
+
+        past_key_values = None
+
+        if self.model_args.layer_wise:
+            # Todo: concat instance input, batch it and process it
+            layer_embed = self.layer_embedding(torch.arange(self.config.num_hidden_layers).long().to(device))
+            # [12, 512] -> [1, 12, 512] -> [64, 12, 512]
+            layer_embed = layer_embed.unsqueeze(0).expand([batch_size, layer_embed.shape[0], layer_embed.shape[1]])
+            # [64, 768] -> [64,1,768] -> [64, 12, 768]
+            avg_input_embedding = avg_input_embedding.unsqueeze(1).expand([avg_input_embedding.shape[0], self.config.num_hidden_layers, avg_input_embedding.shape[-1]])
+            meta_embedding = torch.cat((layer_embed, avg_input_embedding), dim=2)
+            meta_embedding = self.meta_embed_net(meta_embedding)
+            meta_prefix = self.meta_net(meta_embedding) # [64, 12, ?]
+            past_key_values = meta_prefix.view([batch_size,-1]) # [64, ?]
+            # past_key_values = meta_prefix.view(
+            #     batch_size,
+            #     self.config.num_hidden_layers*2,
+            #     self.config.num_attention_heads,
+            #     self.config.hidden_size // self.config.num_attention_heads
+            # )
+            # past_key_values = cls.dropout(past_key_values)
+            # past_key_values = past_key_values.permute([2, 0, 3, 1, 4]).split(2)
+        else:
+            # Todo: directly map avg. instance embedding to meta prefix
+            meta_embedding = self.meta_embed_net(avg_input_embedding) # [64, 512]
+            past_key_values = self.meta_net(meta_embedding)
+
+        past_key_values = past_key_values.view(
+            batch_size,
+            self.model_args.pre_seq_len,
+            self.config.num_hidden_layers * 2, 
+            self.config.num_attention_heads,
+            self.config.hidden_size // self.config.num_attention_heads
+        )
+        past_key_values = cls.dropout(past_key_values)
+        past_key_values = past_key_values.permute([2, 0, 3, 1, 4]).split(2)
+        return past_key_values
 
 class PrefixEncoder(torch.nn.Module):
     r'''
@@ -173,7 +251,11 @@ def get_prefix(cls, batch_size, device=None):
         cls.config.hidden_size // cls.config.num_attention_heads
     )
     past_key_values = cls.dropout(past_key_values)
+    # print(past_key_values.shape) 128, 4, 24, 12, 64
+    # permute 24, 128, 12, 4, 64
     past_key_values = past_key_values.permute([2, 0, 3, 1, 4]).split(2)
+    # print(len(past_key_values)) 12
+    # print(past_key_values[0].shape) 2, 128, 12, 4, 64
     return past_key_values
 
 def cl_init(cls, config):
@@ -221,13 +303,26 @@ def cl_forward(
     if token_type_ids is not None:
         token_type_ids = token_type_ids.view((-1, token_type_ids.size(-1))) # (bs * num_sent, len)
 
-    # Todo: Apply prefix-tuning here!
+    # Done: Apply prefix-tuning here!
     # Keep the code independent for debug
     prefix_attention_mask = None
+    device = torch.device(input_ids.device)
     if cls.use_prefix:
-        device = torch.device(input_ids.device)
         bs = input_ids.shape[0]
         past_key_values = get_prefix(cls, batch_size=bs, device=device)
+        prefix_attention_mask = torch.ones(bs, cls.model_args.pre_seq_len).to(device)
+        prefix_attention_mask = torch.cat((prefix_attention_mask, attention_mask), dim=1)
+
+    # Todo: MetaPrefix
+    if cls.meta_prefix:
+        past_key_values = cls.meta_prefix_encoder(
+            input_ids=input_ids,
+            cls=cls,
+            attention_mask=attention_mask,
+            encoder=encoder,
+            device=device)
+
+        bs = input_ids.shape[0]
         prefix_attention_mask = torch.ones(bs, cls.model_args.pre_seq_len).to(device)
         prefix_attention_mask = torch.cat((prefix_attention_mask, attention_mask), dim=1)
 
@@ -344,12 +439,25 @@ def sentemb_forward(
 ):
     return_dict = return_dict if return_dict is not None else cls.config.use_return_dict
 
-    # Todo: Apply prefix-tuning here!
+    # Done: Apply prefix-tuning here!
     prefix_attention_mask = None
+    device = torch.device(input_ids.device)
     if cls.use_prefix:
-        device = torch.device(input_ids.device)
         bs = input_ids.shape[0]
         past_key_values = get_prefix(cls, batch_size=bs, device=device)
+        prefix_attention_mask = torch.ones(bs, cls.model_args.pre_seq_len).to(device)
+        prefix_attention_mask = torch.cat((prefix_attention_mask, attention_mask), dim=1)
+
+    # Todo: MetaPrefix
+    if cls.meta_prefix:
+        past_key_values = cls.meta_prefix_encoder(
+            input_ids=input_ids,
+            cls=cls,
+            attention_mask=attention_mask,
+            encoder=encoder,
+            device=device)
+
+        bs = input_ids.shape[0]
         prefix_attention_mask = torch.ones(bs, cls.model_args.pre_seq_len).to(device)
         prefix_attention_mask = torch.cat((prefix_attention_mask, attention_mask), dim=1)
 
@@ -388,18 +496,21 @@ class PrefixBertForCL(BertPreTrainedModel):
         self.config = config
         self.model_args = model_kargs["model_args"]
         self.use_prefix = self.model_args.prefix
-
+        self.meta_prefix = self.model_args.meta_prefix
         self.bert = BertModel(config, add_pooling_layer=False)
         # print("model architecture", self.bert)
+        self.dropout = torch.nn.Dropout(self.config.hidden_dropout_prob)
 
         if self.model_args.do_mlm:
             self.lm_head = BertLMPredictionHead(self.config)
             print(self.lm_head)
 
         if self.use_prefix:
-            self.dropout = torch.nn.Dropout(self.config.hidden_dropout_prob)
             self.prefix_tokens = torch.arange(self.model_args.pre_seq_len).long()
             self.prefix_encoder = PrefixEncoder(self.config, model_args=self.model_args)
+        
+        if self.meta_prefix:
+            self.meta_prefix_encoder = MetaPrefixEncoder(self.config, model_args=self.model_args)
 
         cl_init(self, self.config)
 

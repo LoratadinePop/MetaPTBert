@@ -1,291 +1,218 @@
+
+import torch
+model = torch.load("result/bert-base-uncased_meta_prefix_w_layerwise_33/pytorch_model.bin")
+# 打印模型的 state_dict
+for item in model:
+  print(item)
+
 '''
-model architecture BertModel(
-  (embeddings): BertEmbeddings(
-    (word_embeddings): Embedding(30522, 768, padding_idx=0)
-    (position_embeddings): Embedding(512, 768)
-    (token_type_embeddings): Embedding(2, 768)
-    (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-    (dropout): Dropout(p=0.1, inplace=False)
-  )
-  (encoder): BertEncoder(
-    (layer): ModuleList(
-      (0): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (1): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (2): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (3): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (4): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (5): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (6): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (7): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (8): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (9): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (10): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-      (11): BertLayer(
-        (attention): BertAttention(
-          (self): BertSelfAttention(
-            (query): Linear(in_features=768, out_features=768, bias=True)
-            (key): Linear(in_features=768, out_features=768, bias=True)
-            (value): Linear(in_features=768, out_features=768, bias=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-          (output): BertSelfOutput(
-            (dense): Linear(in_features=768, out_features=768, bias=True)
-            (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-            (dropout): Dropout(p=0.1, inplace=False)
-          )
-        )
-        (intermediate): BertIntermediate(
-          (dense): Linear(in_features=768, out_features=3072, bias=True)
-        )
-        (output): BertOutput(
-          (dense): Linear(in_features=3072, out_features=768, bias=True)
-          (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-          (dropout): Dropout(p=0.1, inplace=False)
-        )
-      )
-    )
-  )
-)
+bert.embeddings.position_ids
+bert.embeddings.word_embeddings.weight
+bert.embeddings.position_embeddings.weight
+bert.embeddings.token_type_embeddings.weight
+bert.embeddings.LayerNorm.weight
+bert.embeddings.LayerNorm.bias
+bert.encoder.layer.0.attention.self.query.weight
+bert.encoder.layer.0.attention.self.query.bias
+bert.encoder.layer.0.attention.self.key.weight
+bert.encoder.layer.0.attention.self.key.bias
+bert.encoder.layer.0.attention.self.value.weight
+bert.encoder.layer.0.attention.self.value.bias
+bert.encoder.layer.0.attention.output.dense.weight
+bert.encoder.layer.0.attention.output.dense.bias
+bert.encoder.layer.0.attention.output.LayerNorm.weight
+bert.encoder.layer.0.attention.output.LayerNorm.bias
+bert.encoder.layer.0.intermediate.dense.weight
+bert.encoder.layer.0.intermediate.dense.bias
+bert.encoder.layer.0.output.dense.weight
+bert.encoder.layer.0.output.dense.bias
+bert.encoder.layer.0.output.LayerNorm.weight
+bert.encoder.layer.0.output.LayerNorm.bias
+bert.encoder.layer.1.attention.self.query.weight
+bert.encoder.layer.1.attention.self.query.bias
+bert.encoder.layer.1.attention.self.key.weight
+bert.encoder.layer.1.attention.self.key.bias
+bert.encoder.layer.1.attention.self.value.weight
+bert.encoder.layer.1.attention.self.value.bias
+bert.encoder.layer.1.attention.output.dense.weight
+bert.encoder.layer.1.attention.output.dense.bias
+bert.encoder.layer.1.attention.output.LayerNorm.weight
+bert.encoder.layer.1.attention.output.LayerNorm.bias
+bert.encoder.layer.1.intermediate.dense.weight
+bert.encoder.layer.1.intermediate.dense.bias
+bert.encoder.layer.1.output.dense.weight
+bert.encoder.layer.1.output.dense.bias
+bert.encoder.layer.1.output.LayerNorm.weight
+bert.encoder.layer.1.output.LayerNorm.bias
+bert.encoder.layer.2.attention.self.query.weight
+bert.encoder.layer.2.attention.self.query.bias
+bert.encoder.layer.2.attention.self.key.weight
+bert.encoder.layer.2.attention.self.key.bias
+bert.encoder.layer.2.attention.self.value.weight
+bert.encoder.layer.2.attention.self.value.bias
+bert.encoder.layer.2.attention.output.dense.weight
+bert.encoder.layer.2.attention.output.dense.bias
+bert.encoder.layer.2.attention.output.LayerNorm.weight
+bert.encoder.layer.2.attention.output.LayerNorm.bias
+bert.encoder.layer.2.intermediate.dense.weight
+bert.encoder.layer.2.intermediate.dense.bias
+bert.encoder.layer.2.output.dense.weight
+bert.encoder.layer.2.output.dense.bias
+bert.encoder.layer.2.output.LayerNorm.weight
+bert.encoder.layer.2.output.LayerNorm.bias
+bert.encoder.layer.3.attention.self.query.weight
+bert.encoder.layer.3.attention.self.query.bias
+bert.encoder.layer.3.attention.self.key.weight
+bert.encoder.layer.3.attention.self.key.bias
+bert.encoder.layer.3.attention.self.value.weight
+bert.encoder.layer.3.attention.self.value.bias
+bert.encoder.layer.3.attention.output.dense.weight
+bert.encoder.layer.3.attention.output.dense.bias
+bert.encoder.layer.3.attention.output.LayerNorm.weight
+bert.encoder.layer.3.attention.output.LayerNorm.bias
+bert.encoder.layer.3.intermediate.dense.weight
+bert.encoder.layer.3.intermediate.dense.bias
+bert.encoder.layer.3.output.dense.weight
+bert.encoder.layer.3.output.dense.bias
+bert.encoder.layer.3.output.LayerNorm.weight
+bert.encoder.layer.3.output.LayerNorm.bias
+bert.encoder.layer.4.attention.self.query.weight
+bert.encoder.layer.4.attention.self.query.bias
+bert.encoder.layer.4.attention.self.key.weight
+bert.encoder.layer.4.attention.self.key.bias
+bert.encoder.layer.4.attention.self.value.weight
+bert.encoder.layer.4.attention.self.value.bias
+bert.encoder.layer.4.attention.output.dense.weight
+bert.encoder.layer.4.attention.output.dense.bias
+bert.encoder.layer.4.attention.output.LayerNorm.weight
+bert.encoder.layer.4.attention.output.LayerNorm.bias
+bert.encoder.layer.4.intermediate.dense.weight
+bert.encoder.layer.4.intermediate.dense.bias
+bert.encoder.layer.4.output.dense.weight
+bert.encoder.layer.4.output.dense.bias
+bert.encoder.layer.4.output.LayerNorm.weight
+bert.encoder.layer.4.output.LayerNorm.bias
+bert.encoder.layer.5.attention.self.query.weight
+bert.encoder.layer.5.attention.self.query.bias
+bert.encoder.layer.5.attention.self.key.weight
+bert.encoder.layer.5.attention.self.key.bias
+bert.encoder.layer.5.attention.self.value.weight
+bert.encoder.layer.5.attention.self.value.bias
+bert.encoder.layer.5.attention.output.dense.weight
+bert.encoder.layer.5.attention.output.dense.bias
+bert.encoder.layer.5.attention.output.LayerNorm.weight
+bert.encoder.layer.5.attention.output.LayerNorm.bias
+bert.encoder.layer.5.intermediate.dense.weight
+bert.encoder.layer.5.intermediate.dense.bias
+bert.encoder.layer.5.output.dense.weight
+bert.encoder.layer.5.output.dense.bias
+bert.encoder.layer.5.output.LayerNorm.weight
+bert.encoder.layer.5.output.LayerNorm.bias
+bert.encoder.layer.6.attention.self.query.weight
+bert.encoder.layer.6.attention.self.query.bias
+bert.encoder.layer.6.attention.self.key.weight
+bert.encoder.layer.6.attention.self.key.bias
+bert.encoder.layer.6.attention.self.value.weight
+bert.encoder.layer.6.attention.self.value.bias
+bert.encoder.layer.6.attention.output.dense.weight
+bert.encoder.layer.6.attention.output.dense.bias
+bert.encoder.layer.6.attention.output.LayerNorm.weight
+bert.encoder.layer.6.attention.output.LayerNorm.bias
+bert.encoder.layer.6.intermediate.dense.weight
+bert.encoder.layer.6.intermediate.dense.bias
+bert.encoder.layer.6.output.dense.weight
+bert.encoder.layer.6.output.dense.bias
+bert.encoder.layer.6.output.LayerNorm.weight
+bert.encoder.layer.6.output.LayerNorm.bias
+bert.encoder.layer.7.attention.self.query.weight
+bert.encoder.layer.7.attention.self.query.bias
+bert.encoder.layer.7.attention.self.key.weight
+bert.encoder.layer.7.attention.self.key.bias
+bert.encoder.layer.7.attention.self.value.weight
+bert.encoder.layer.7.attention.self.value.bias
+bert.encoder.layer.7.attention.output.dense.weight
+bert.encoder.layer.7.attention.output.dense.bias
+bert.encoder.layer.7.attention.output.LayerNorm.weight
+bert.encoder.layer.7.attention.output.LayerNorm.bias
+bert.encoder.layer.7.intermediate.dense.weight
+bert.encoder.layer.7.intermediate.dense.bias
+bert.encoder.layer.7.output.dense.weight
+bert.encoder.layer.7.output.dense.bias
+bert.encoder.layer.7.output.LayerNorm.weight
+bert.encoder.layer.7.output.LayerNorm.bias
+bert.encoder.layer.8.attention.self.query.weight
+bert.encoder.layer.8.attention.self.query.bias
+bert.encoder.layer.8.attention.self.key.weight
+bert.encoder.layer.8.attention.self.key.bias
+bert.encoder.layer.8.attention.self.value.weight
+bert.encoder.layer.8.attention.self.value.bias
+bert.encoder.layer.8.attention.output.dense.weight
+bert.encoder.layer.8.attention.output.dense.bias
+bert.encoder.layer.8.attention.output.LayerNorm.weight
+bert.encoder.layer.8.attention.output.LayerNorm.bias
+bert.encoder.layer.8.intermediate.dense.weight
+bert.encoder.layer.8.intermediate.dense.bias
+bert.encoder.layer.8.output.dense.weight
+bert.encoder.layer.8.output.dense.bias
+bert.encoder.layer.8.output.LayerNorm.weight
+bert.encoder.layer.8.output.LayerNorm.bias
+bert.encoder.layer.9.attention.self.query.weight
+bert.encoder.layer.9.attention.self.query.bias
+bert.encoder.layer.9.attention.self.key.weight
+bert.encoder.layer.9.attention.self.key.bias
+bert.encoder.layer.9.attention.self.value.weight
+bert.encoder.layer.9.attention.self.value.bias
+bert.encoder.layer.9.attention.output.dense.weight
+bert.encoder.layer.9.attention.output.dense.bias
+bert.encoder.layer.9.attention.output.LayerNorm.weight
+bert.encoder.layer.9.attention.output.LayerNorm.bias
+bert.encoder.layer.9.intermediate.dense.weight
+bert.encoder.layer.9.intermediate.dense.bias
+bert.encoder.layer.9.output.dense.weight
+bert.encoder.layer.9.output.dense.bias
+bert.encoder.layer.9.output.LayerNorm.weight
+bert.encoder.layer.9.output.LayerNorm.bias
+bert.encoder.layer.10.attention.self.query.weight
+bert.encoder.layer.10.attention.self.query.bias
+bert.encoder.layer.10.attention.self.key.weight
+bert.encoder.layer.10.attention.self.key.bias
+bert.encoder.layer.10.attention.self.value.weight
+bert.encoder.layer.10.attention.self.value.bias
+bert.encoder.layer.10.attention.output.dense.weight
+bert.encoder.layer.10.attention.output.dense.bias
+bert.encoder.layer.10.attention.output.LayerNorm.weight
+bert.encoder.layer.10.attention.output.LayerNorm.bias
+bert.encoder.layer.10.intermediate.dense.weight
+bert.encoder.layer.10.intermediate.dense.bias
+bert.encoder.layer.10.output.dense.weight
+bert.encoder.layer.10.output.dense.bias
+bert.encoder.layer.10.output.LayerNorm.weight
+bert.encoder.layer.10.output.LayerNorm.bias
+bert.encoder.layer.11.attention.self.query.weight
+bert.encoder.layer.11.attention.self.query.bias
+bert.encoder.layer.11.attention.self.key.weight
+bert.encoder.layer.11.attention.self.key.bias
+bert.encoder.layer.11.attention.self.value.weight
+bert.encoder.layer.11.attention.self.value.bias
+bert.encoder.layer.11.attention.output.dense.weight
+bert.encoder.layer.11.attention.output.dense.bias
+bert.encoder.layer.11.attention.output.LayerNorm.weight
+bert.encoder.layer.11.attention.output.LayerNorm.bias
+bert.encoder.layer.11.intermediate.dense.weight
+bert.encoder.layer.11.intermediate.dense.bias
+bert.encoder.layer.11.output.dense.weight
+bert.encoder.layer.11.output.dense.bias
+bert.encoder.layer.11.output.LayerNorm.weight
+bert.encoder.layer.11.output.LayerNorm.bias
+meta_prefix_encoder.layer_embedding.weight
+meta_prefix_encoder.meta_embed_net.0.weight
+meta_prefix_encoder.meta_embed_net.0.bias
+meta_prefix_encoder.meta_embed_net.2.weight
+meta_prefix_encoder.meta_embed_net.2.bias
+meta_prefix_encoder.meta_net.0.weight
+meta_prefix_encoder.meta_net.0.bias
+meta_prefix_encoder.meta_net.2.weight
+meta_prefix_encoder.meta_net.2.bias
+mlp.dense.weight
+mlp.dense.bias
 '''
