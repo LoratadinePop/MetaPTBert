@@ -338,19 +338,19 @@ def main():
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     
     # import wandb's parameters
-    data_args.train_file = hyperparameters.train_file
-    data_args.max_seq_length = hyperparameters.max_seq_length
+    # data_args.train_file = hyperparameters.train_file
+    # data_args.max_seq_length = hyperparameters.max_seq_length
 
-    training_args.model_name_or_path = hyperparameters.model_name_or_path
-    training_args.report_to ="wandb"
-    training_args.seed = hyperparameters.seed
-    training_args.num_train_epochs = hyperparameters.num_train_epochs
-    training_args.per_device_train_batch_size = hyperparameters.per_device_train_batch_size
-    training_args.learning_rate = hyperparameters.learning_rate
-    training_args.evaluation_strategy = hyperparameters.evaluation_strategy
-    training_args.metric_for_best_model = hyperparameters.metric_for_best_model
-    training_args.eval_steps = hyperparameters.eval_steps
-    training_args.output_dir = hyperparameters.output_dir
+    # training_args.model_name_or_path = hyperparameters.model_name_or_path
+    # training_args.report_to ="wandb"
+    # training_args.seed = hyperparameters.seed
+    # training_args.num_train_epochs = hyperparameters.num_train_epochs
+    # training_args.per_device_train_batch_size = hyperparameters.per_device_train_batch_size
+    # training_args.learning_rate = hyperparameters.learning_rate
+    # training_args.evaluation_strategy = hyperparameters.evaluation_strategy
+    # training_args.metric_for_best_model = hyperparameters.metric_for_best_model
+    # training_args.eval_steps = hyperparameters.eval_steps
+    # training_args.output_dir = hyperparameters.output_dir
     # training_args.load_best_model_at_end = hyperparameters.load_best_model_at_end
     # training_args.overwrite_output_dir = hyperparameters.overwrite_output_dir
     # training_args.fp16 = hyperparameters.fp16
@@ -360,21 +360,25 @@ def main():
     # model_args.meta_prefix = hyperparameters.meta_prefix
     # model_args.layer_wise = hyperparameters.layer_wise
     # model_args.do_mlm = hyperparameters.do_mlm
-    model_args.temp = hyperparameters.temp
-    model_args.pooler_type = hyperparameters.pooler_type
-    model_args.meta_embed_size = hyperparameters.meta_embed_size
-    model_args.meta_hidden_size = hyperparameters.meta_hidden_size
-    model_args.layer_embed_size = hyperparameters.layer_embed_size
-    model_args.pre_seq_len = hyperparameters.pre_seq_len
-    model_args.prefix_hidden_size = hyperparameters.prefix_hidden_size
+    # model_args.temp = hyperparameters.temp
+    # model_args.pooler_type = hyperparameters.pooler_type
+    # model_args.meta_embed_size = hyperparameters.meta_embed_size
+    # model_args.meta_hidden_size = hyperparameters.meta_hidden_size
+    # model_args.layer_embed_size = hyperparameters.layer_embed_size
+    # model_args.pre_seq_len = hyperparameters.pre_seq_len
+    # model_args.prefix_hidden_size = hyperparameters.prefix_hidden_size
 
     training_args.output_dir += "-lr_"+str(training_args.learning_rate)
-
     if model_args.meta_prefix:
         training_args.output_dir += "-prefixlen_" + str(model_args.pre_seq_len)
         if model_args.layer_wise:
             training_args.output_dir += "-layerembedsize_" + str(model_args.layer_embed_size)
         training_args.output_dir += "-metaembedsize_" + str(model_args.meta_embed_size)
+        
+    print(model_args)
+    print(data_args)
+    print(training_args)
+
 
     if (
         os.path.exists(training_args.output_dir)
