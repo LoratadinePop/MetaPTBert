@@ -4,9 +4,11 @@ simcse/__pycache__/
 *.py[cod]
 *$py.class
 
+# wandb logging
+wandb/
+
 # C extensions
 *.so
-
 # Distribution / packaging
 .Python
 build/
