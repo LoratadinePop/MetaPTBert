@@ -2,6 +2,7 @@ import logging
 import math
 import os
 import sys
+os.environ['WANDB_DISABLED'] = 'True'
 from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Tuple
 import numpy as np
@@ -38,10 +39,10 @@ from transformers.file_utils import cached_property, torch_required, is_torch_av
 from simcse.models import RobertaForCL, BertForCL, PrefixBertForCL
 from simcse.trainers import CLTrainer
 
+
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-
 @dataclass
 class ModelArguments:
     """
@@ -333,9 +334,9 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     
-    # print(model_args)
-    # print(data_args)
-    # print(training_args)
+    print(model_args)
+    print(data_args)
+    print(training_args)
 
     if (
         os.path.exists(training_args.output_dir)
@@ -458,10 +459,11 @@ def main():
         else:
             raise NotImplementedError
         if model_args.frozen:
-            freeze_layers = ["bert", "roberta", "mlp"]
+            freeze_layers = ["bert", "roberta"]
             for name, param in model.named_parameters():
                 for f in freeze_layers:
                     if f in name:
+                        print(f"{name} is frozen.")
                         param.requires_grad = False
                         break
     else:

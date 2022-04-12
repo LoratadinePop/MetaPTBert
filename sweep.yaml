@@ -1,0 +1,75 @@
+program: /home/yzp/project/SimCSE/sweep.py
+project: MetaPT20
+method: grid
+# metric:
+#   name: loss
+#   goal: minimize
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args}
+parameters:
+  do_train:
+    value: True
+  do_eval:
+    value: True
+  overwrite_output_dir:
+    value: True
+  load_best_model_at_end:
+    value: True
+  fp16:
+    value: True
+  # model args
+  frozen:
+    value: False
+  prefix:
+    value: False
+  hyper_prefix:
+    values: [False]
+  meta_prefix:
+    value: True
+  layer_wise:
+    value: True
+  pre_seq_len:
+    values: [4, 8, 12, 16]
+  meta_embed_size:
+    values: [512, 768]
+  layer_embed_size:
+    values: [32, 64, 128]
+  meta_hidden_size:
+    values: [512]
+  prefix_hidden_size:
+    values: [512]
+  temp: 
+    value: 0.05
+  mlp_only_train:
+    value: True
+  do_mlm:
+    value: False
+  mlm_weight:
+    value: 0.1
+  output_dir:
+    value: result/wandb/bert-base-uncased-nofrozen-nomlm-layerwise-metaprefix
+  model_name_or_path:
+    value: bert-base-uncased
+  train_file:
+    value: data/wiki1m_for_simcse.txt
+  seed:
+    value: 42
+  num_train_epochs:
+    value: 1
+  per_device_train_batch_size:
+    value: 128 # 64, 128, 256
+  learning_rate:
+    values: [3e-5, 5e-3, 3e-2] # When frozen, lr should be large, 1e-3, 5e-3, 3e-2, 1e-2, 3e-4,
+  max_seq_length: #
+    value: 32
+  evaluation_strategy:
+    value: steps
+  metric_for_best_model:
+    value: stsb_spearman
+  eval_steps:
+    value: 125 # 125
+  pooler_type:
+    value: cls

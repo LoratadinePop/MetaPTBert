@@ -20,40 +20,6 @@ from transformers.file_utils import (
 )
 from transformers.modeling_outputs import SequenceClassifierOutput, BaseModelOutputWithPoolingAndCrossAttentions
 
-'''
-BertConfig {
-  "_name_or_path": "bert-base-uncased",
-  "architectures": [
-    "BertForMaskedLM"
-  ],
-  "attention_probs_dropout_prob": 0.1,
-  "gradient_checkpointing": false,
-  "hidden_act": "gelu",
-  "hidden_dropout_prob": 0.1,
-  "hidden_size": 768,
-  "initializer_range": 0.02,
-  "intermediate_size": 3072,
-  "layer_norm_eps": 1e-12,
-  "max_position_embeddings": 512,
-  "model_type": "bert",
-  "num_attention_heads": 12,
-  "num_hidden_layers": 12,
-  "pad_token_id": 0,
-  "position_embedding_type": "absolute",
-  "transformers_version": "4.2.1",
-  "type_vocab_size": 2,
-  "use_cache": true,
-  "vocab_size": 30522
-}
-
-ModelArguments(model_name_or_path='bert-base-uncased', 
-model_type=None, config_name=None, 
-tokenizer_name=None, cache_dir=None, use_fast_tokenizer=True, model_revision='main',
- use_auth_token=False, prefix=False, hyper_prefix=False, pre_seq_len=4, prefix_projection=False, 
- prefix_hidden_size=512, temp=0.05, pooler_type='cls',
-  hard_negative_weight=0, do_mlm=False, mlm_weight=0.1, mlp_only_train=True)
-
-'''
 class MetaPrefixEncoder(torch.nn.Module):
     r'''
     The torch.nn model to encode the instance-wise and layer-wise meta-prefix.
@@ -65,12 +31,13 @@ class MetaPrefixEncoder(torch.nn.Module):
         self.config = config
         # layer embeddings
         if self.model_args.layer_wise:
+            # TODO: Whether to use a linear layer to parameterize the layer embeddings? No in HyperFormer
             self.layer_embedding = torch.nn.Embedding(config.num_hidden_layers, self.model_args.layer_embed_size)
         
         # meta embedding encoder
+        # Todo: Whether to use a linear layer to parameterize the avg. input embeddings to stabilize the training?
         self.MetaEmbedEncoder = torch.nn.Sequential(
-            torch.nn.Linear(config.hidden_size + self.model_args.layer_embed_size 
-                if self.model_args.layer_wise else config.hidden_size, self.model_args.meta_hidden_size),
+            torch.nn.Linear(config.hidden_size + self.model_args.layer_embed_size if self.model_args.layer_wise else config.hidden_size, self.model_args.meta_hidden_size),
             torch.nn.ReLU(),
             torch.nn.Linear(self.model_args.meta_hidden_size,  self.model_args.meta_embed_size)
         )
@@ -80,8 +47,6 @@ class MetaPrefixEncoder(torch.nn.Module):
             torch.nn.ReLU(), #or Tanh()
             torch.nn.Linear(self.model_args.prefix_hidden_size, 2 * config.hidden_size * self.model_args.pre_seq_len 
             if self.model_args.layer_wise else 2 * config.hidden_size * config.num_hidden_layers * self.model_args.pre_seq_len)
-            # 如果是只以avg作为meta embedding，那么需要投射到每一层（同样的输入，同样的输出），
-            # 而如果是layer_wise，每一层的input都不同，因此只需要投射到该层的embedding length即可。
         )
     
     def forward(self, **kwargs):

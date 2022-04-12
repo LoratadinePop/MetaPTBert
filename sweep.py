@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import collections
 import random
-
+import time
 from datasets import load_dataset
 
 import transformers
@@ -322,63 +322,66 @@ class OurTrainingArguments(TrainingArguments):
         return device
 
 
-def main():
+def main(hyperparameters):
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
-    wandb.init(group="MetaPT-NoFrozen-NoMLM-LayerWise-MetaPrefix")
-    hyperparameters = wandb.config
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, OurTrainingArguments))
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        # If we pass only one argument to the script and it's the path to a json file,
-        # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
-    else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    # parser = HfArgumentParser((ModelArguments, DataTrainingArguments, OurTrainingArguments))
+    # if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+    #     # If we pass only one argument to the script and it's the path to a json file,
+    #     # let's parse it to get our arguments.
+    #     model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+    # else:
+    #     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    data_args = DataTrainingArguments(
+        train_file = hyperparameters.train_file, 
+        max_seq_length = hyperparameters.max_seq_length)
+
+    training_args = OurTrainingArguments(
+        output_dir=hyperparameters.output_dir,
+        evaluation_strategy = hyperparameters.evaluation_strategy,
+        # dataloader_drop_last = True,
+        seed = hyperparameters.seed,
+        num_train_epochs = hyperparameters.num_train_epochs,
+        per_device_train_batch_size = hyperparameters.per_device_train_batch_size,
+        learning_rate = hyperparameters.learning_rate,
+        metric_for_best_model = hyperparameters.metric_for_best_model,
+        eval_steps = hyperparameters.eval_steps,
+        load_best_model_at_end = hyperparameters.load_best_model_at_end,
+        overwrite_output_dir = hyperparameters.overwrite_output_dir,
+        fp16 = hyperparameters.fp16,
+        do_train = hyperparameters.do_train,
+        do_eval = hyperparameters.do_eval)
+
+    model_args = ModelArguments(
+        model_name_or_path = hyperparameters.model_name_or_path,
+        mlp_only_train = hyperparameters.mlp_only_train,
+        frozen = hyperparameters.frozen,
+        meta_prefix = hyperparameters.meta_prefix,
+        layer_wise = hyperparameters.layer_wise,
+        do_mlm = hyperparameters.do_mlm,
+        temp = hyperparameters.temp,
+        pooler_type = hyperparameters.pooler_type,
+        meta_embed_size = hyperparameters.meta_embed_size,
+        meta_hidden_size = hyperparameters.meta_hidden_size,
+        layer_embed_size = hyperparameters.layer_embed_size,
+        pre_seq_len = hyperparameters.pre_seq_len,
+        prefix_hidden_size = hyperparameters.prefix_hidden_size
+    )
+
+    if model_args.frozen:
+        training_args.output_dir += "-frozen"
+    if model_args.do_mlm:
+        training_args.output_dir += "-domlm"
     
-    # import wandb's parameters
-    # data_args.train_file = hyperparameters.train_file
-    # data_args.max_seq_length = hyperparameters.max_seq_length
-
-    # training_args.model_name_or_path = hyperparameters.model_name_or_path
-    # training_args.report_to ="wandb"
-    # training_args.seed = hyperparameters.seed
-    # training_args.num_train_epochs = hyperparameters.num_train_epochs
-    # training_args.per_device_train_batch_size = hyperparameters.per_device_train_batch_size
-    # training_args.learning_rate = hyperparameters.learning_rate
-    # training_args.evaluation_strategy = hyperparameters.evaluation_strategy
-    # training_args.metric_for_best_model = hyperparameters.metric_for_best_model
-    # training_args.eval_steps = hyperparameters.eval_steps
-    # training_args.output_dir = hyperparameters.output_dir
-    # training_args.load_best_model_at_end = hyperparameters.load_best_model_at_end
-    # training_args.overwrite_output_dir = hyperparameters.overwrite_output_dir
-    # training_args.fp16 = hyperparameters.fp16
-
-    # model_args.mlp_only_train = hyperparameters.mlp_only_train
-    # model_args.frozen = hyperparameters.frozen
-    # model_args.meta_prefix = hyperparameters.meta_prefix
-    # model_args.layer_wise = hyperparameters.layer_wise
-    # model_args.do_mlm = hyperparameters.do_mlm
-    # model_args.temp = hyperparameters.temp
-    # model_args.pooler_type = hyperparameters.pooler_type
-    # model_args.meta_embed_size = hyperparameters.meta_embed_size
-    # model_args.meta_hidden_size = hyperparameters.meta_hidden_size
-    # model_args.layer_embed_size = hyperparameters.layer_embed_size
-    # model_args.pre_seq_len = hyperparameters.pre_seq_len
-    # model_args.prefix_hidden_size = hyperparameters.prefix_hidden_size
-
     training_args.output_dir += "-lr_"+str(training_args.learning_rate)
     if model_args.meta_prefix:
         training_args.output_dir += "-prefixlen_" + str(model_args.pre_seq_len)
         if model_args.layer_wise:
             training_args.output_dir += "-layerembedsize_" + str(model_args.layer_embed_size)
         training_args.output_dir += "-metaembedsize_" + str(model_args.meta_embed_size)
-        
-    print(model_args)
-    print(data_args)
-    print(training_args)
-
 
     if (
         os.path.exists(training_args.output_dir)
@@ -501,10 +504,11 @@ def main():
         else:
             raise NotImplementedError
         if model_args.frozen:
-            freeze_layers = ["bert", "roberta", "mlp"]
+            freeze_layers = ["bert", "roberta"]
             for name, param in model.named_parameters():
                 for f in freeze_layers:
                     if f in name:
+                        print(f"{name} is frozen")
                         param.requires_grad = False
                         break
     else:
@@ -734,15 +738,15 @@ def main():
             with open(output_eval_file, "w") as writer:
                 logger.info("***** Eval results *****")
                 for key, value in sorted(results.items()):
+                    # Logging to wandb's summary
+                    wandb.run.summary["test/" + key] = value
                     logger.info(f"  {key} = {value}")
                     writer.write(f"{key} = {value}\n")
 
-    return results
-
-def _mp_fn(index):
-    # For xla_spawn (TPUs)
-    main()
-
+    # Conflict with wandb's sweep
+    # return results
 
 if __name__ == "__main__":
-    main()
+    with wandb.init(group="(Bert-B)nofrozen-nomlm-layerwise-metaprefix"):
+        config = wandb.config
+        main(config)

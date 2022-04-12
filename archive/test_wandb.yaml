@@ -1,0 +1,21 @@
+program: /home/yzp/project/SimCSE/test_wandb.py
+project: TestHuggingFace
+method: grid
+command:
+  - ${env}
+  - python
+  - ${program}
+  - "--do_train"
+  - "--overwrite_output_dir"
+  - ${args}
+parameters:
+  output_dir:
+    value: result/test_wandb_huggingface
+  num_train_epochs:
+    values: [1, 2, 3]
+  per_device_train_batch_size:
+    value: 32
+  learning_rate:
+    values: [3e-5, 5e-3, 3e-2]
+  evaluation_strategy:
+    value: epoch
