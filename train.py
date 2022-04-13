@@ -444,7 +444,7 @@ def main():
             )
         elif 'bert' in model_args.model_name_or_path:
             # Todo: Change Bert to PrefixBert
-            model = PrefixBertForCL.from_pretrained(
+            model = BertForCL.from_pretrained(
                 model_args.model_name_or_path,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
                 config=config,
@@ -684,9 +684,9 @@ def main():
     # Evaluation
     results = {}
     if training_args.do_eval:
-        print("evaluation has a bug?")
-        logger.info("*** Evaluate ***")
-        results = trainer.evaluate(eval_senteval_transfer=True)
+        # logger.info("*** Evaluate ***")
+        logger.info("*** Final Evaluate as Test ***")
+        results = trainer.evaluate(eval_senteval_transfer=True, final_evaluation=True)
 
         output_eval_file = os.path.join(training_args.output_dir, "eval_results.txt")
         if trainer.is_world_process_zero():

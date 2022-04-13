@@ -36,6 +36,7 @@ class MetaPrefixEncoder(torch.nn.Module):
         
         # meta embedding encoder
         # Todo: Whether to use a linear layer to parameterize the avg. input embeddings to stabilize the training?
+        # Tag: This MetaEmbedEncoder doesn't needed to be parameterize by HyperNetworks.
         self.MetaEmbedEncoder = torch.nn.Sequential(
             torch.nn.Linear(config.hidden_size + self.model_args.layer_embed_size if self.model_args.layer_wise else config.hidden_size, self.model_args.meta_hidden_size),
             torch.nn.ReLU(),
@@ -91,6 +92,7 @@ class MetaPrefixEncoder(torch.nn.Module):
         past_key_values = past_key_values.permute([2, 0, 3, 1, 4]).split(2)
 
         return past_key_values
+
 
 class PrefixEncoder(torch.nn.Module):
     r'''
@@ -217,6 +219,7 @@ def get_prefix(cls, batch_size, device=None):
     # print(len(past_key_values)) 12
     # print(past_key_values[0].shape) 2, 128, 12, 4, 64
     return past_key_values
+
 
 def cl_init(cls, config):
     # cls means self
@@ -447,6 +450,7 @@ def sentemb_forward(
         last_hidden_state=outputs.last_hidden_state,
         hidden_states=outputs.hidden_states,
     )
+
 
 class PrefixBertForCL(BertPreTrainedModel):
     _keys_to_ignore_on_load_missing = [r"position_ids"]

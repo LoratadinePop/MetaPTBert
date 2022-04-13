@@ -1,7 +1,9 @@
 """
-    Evaluation code for MetaPT specifically!
+    Original SimCSE's evaluation code.
+    The model must be huggingface style, thus call simcse_to_huggingface.py
+    to convert SimCSE's checkpoints to Huggingface style.
 """
-from ast import arg
+
 import sys
 import io, os
 import numpy as np
@@ -10,8 +12,7 @@ import argparse
 from prettytable import PrettyTable
 import torch
 import transformers
-from transformers import AutoModel, AutoTokenizer, AutoConfig
-from simcse.models import PrefixBertForCL, RobertaForCL
+from transformers import AutoModel, AutoTokenizer
 
 # Set up logger
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
@@ -32,85 +33,30 @@ def print_table(task_names, scores):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name_or_path", type=str, default="result/bert-base-frozen-nolayerwise-42",
+    parser.add_argument("--model_name_or_path", type=str, default="result/bert-base-uncased_SimCSE_baseline", 
             help="Transformers' model name or path")
     parser.add_argument("--pooler", type=str, 
             choices=['cls', 'cls_before_pooler', 'avg', 'avg_top2', 'avg_first_last'], 
             default='cls_before_pooler', 
-            help="Which pooler to use. For supervised models, use cls, cls_before_pooler for unsupervised models.")
-    parser.add_argument("--pooler_type", type=str, 
-            choices=['cls', 'cls_before_pooler', 'avg', 'avg_top2', 'avg_first_last'], 
-            default='cls', 
-            help="Which pooler to use. For supervised models, use cls, cls_before_pooler for unsupervised models.")
+            help="Which pooler to use")
     parser.add_argument("--mode", type=str, 
             choices=['dev', 'test', 'fasttest'],
             default='test', 
             help="What evaluation mode to use (dev: fast mode, dev results; test: full mode, test results); fasttest: fast mode, test results")
     parser.add_argument("--task_set", type=str, 
             choices=['sts', 'transfer', 'full', 'na'],
-            default='sts',
+            default='full',
             help="What set of tasks to evaluate on. If not 'na', this will override '--tasks'")
     parser.add_argument("--tasks", type=str, nargs='+', 
             default=['STS12', 'STS13', 'STS14', 'STS15', 'STS16',
                      'MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'TREC', 'MRPC',
                      'SICKRelatedness', 'STSBenchmark'], 
             help="Tasks to evaluate on. If '--task_set' is specified, this will be overridden")
-    parser.add_argument("--cache_dir", type=str, 
-            default=None,
-            help="Where do you want to store the pretrained models downloaded from huggingface.co")
-    parser.add_argument("--model_revision", type=str, 
-            default="main",
-            help="The specific model version to use (can be a branch name, tag name or commit id).")
-    parser.add_argument("--use_auth_token", action='store_true', 
-            help="Will use the token generated when running `transformers-cli login` (necessary to use this script "
-            "with private models).")
-
+    
     args = parser.parse_args()
-    args.frozen = True
-    args.prefix = False
-    args.prefix_projection = False
-    args.temp = 0.05
-    args.hyper_prefix = False
-    args.meta_prefix = True
-    args.layer_wise = False
-    args.meta_embed_size = 512
-    args.meta_hidden_size = 512
-    args.layer_embed_size = 32
-    args.pre_seq_len = 8
-    args.prefix_hidden_size = 512
-    args.do_mlm = False
-    args.hard_negative_weight = 0
-    args.mlm_weight = 0.1
-    args.mlp_only_train = True
-
-
-    print(args)
     
     # Load transformers' model checkpoint
-    config = AutoConfig.from_pretrained(args.model_name_or_path)
-
-    if 'roberta' in args.model_name_or_path:
-        model = RobertaForCL.from_pretrained(
-                args.model_name_or_path,
-                from_tf=bool(".ckpt" in args.model_name_or_path),
-                config=config,
-                cache_dir=args.cache_dir,
-                revision=args.model_revision,
-                use_auth_token=True if args.use_auth_token else None,
-                model_args=args                  
-            )
-    elif 'bert' in args.model_name_or_path:
-        model = PrefixBertForCL.from_pretrained(
-                args.model_name_or_path,
-                from_tf=bool(".ckpt" in args.model_name_or_path),
-                config=config,
-                cache_dir=args.cache_dir,
-                revision=args.model_revision,
-                use_auth_token=True if args.use_auth_token else None,
-                model_args=args
-            )
-
-    # model = AutoModel.from_pretrained(args.model_name_or_path)
+    model = AutoModel.from_pretrained(args.model_name_or_path)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -171,33 +117,31 @@ def main():
         
         # Get raw embeddings
         with torch.no_grad():
-            outputs = model(**batch, output_hidden_states=True, return_dict=True, sent_emb=True)
+            outputs = model(**batch, output_hidden_states=True, return_dict=True)
+            last_hidden = outputs.last_hidden_state
             pooler_output = outputs.pooler_output
-            return pooler_output.cpu()
-            # last_hidden = outputs.last_hidden_state
-            # pooler_output = outputs.pooler_output
-            # hidden_states = outputs.hidden_states
+            hidden_states = outputs.hidden_states
 
         # Apply different poolers
-        # if args.pooler == 'cls':
-        #     # There is a linear+activation layer after CLS representation
-        #     return pooler_output.cpu()
-        # elif args.pooler == 'cls_before_pooler':
-        #     return last_hidden[:, 0].cpu()
-        # elif args.pooler == "avg":
-        #     return ((last_hidden * batch['attention_mask'].unsqueeze(-1)).sum(1) / batch['attention_mask'].sum(-1).unsqueeze(-1)).cpu()
-        # elif args.pooler == "avg_first_last":
-        #     first_hidden = hidden_states[0]
-        #     last_hidden = hidden_states[-1]
-        #     pooled_result = ((first_hidden + last_hidden) / 2.0 * batch['attention_mask'].unsqueeze(-1)).sum(1) / batch['attention_mask'].sum(-1).unsqueeze(-1)
-        #     return pooled_result.cpu()
-        # elif args.pooler == "avg_top2":
-        #     second_last_hidden = hidden_states[-2]
-        #     last_hidden = hidden_states[-1]
-        #     pooled_result = ((last_hidden + second_last_hidden) / 2.0 * batch['attention_mask'].unsqueeze(-1)).sum(1) / batch['attention_mask'].sum(-1).unsqueeze(-1)
-        #     return pooled_result.cpu()
-        # else:
-        #     raise NotImplementedError
+        if args.pooler == 'cls':
+            # There is a linear+activation layer after CLS representation
+            return pooler_output.cpu()
+        elif args.pooler == 'cls_before_pooler':
+            return last_hidden[:, 0].cpu()
+        elif args.pooler == "avg":
+            return ((last_hidden * batch['attention_mask'].unsqueeze(-1)).sum(1) / batch['attention_mask'].sum(-1).unsqueeze(-1)).cpu()
+        elif args.pooler == "avg_first_last":
+            first_hidden = hidden_states[0]
+            last_hidden = hidden_states[-1]
+            pooled_result = ((first_hidden + last_hidden) / 2.0 * batch['attention_mask'].unsqueeze(-1)).sum(1) / batch['attention_mask'].sum(-1).unsqueeze(-1)
+            return pooled_result.cpu()
+        elif args.pooler == "avg_top2":
+            second_last_hidden = hidden_states[-2]
+            last_hidden = hidden_states[-1]
+            pooled_result = ((last_hidden + second_last_hidden) / 2.0 * batch['attention_mask'].unsqueeze(-1)).sum(1) / batch['attention_mask'].sum(-1).unsqueeze(-1)
+            return pooled_result.cpu()
+        else:
+            raise NotImplementedError
 
     results = {}
 

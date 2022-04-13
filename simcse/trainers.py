@@ -6,6 +6,7 @@ import os
 import re
 import json
 import shutil
+from prettytable import PrettyTable
 import time
 import warnings
 from pathlib import Path
@@ -57,6 +58,13 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
+def print_table(task_names, scores):
+    tb = PrettyTable()
+    tb.field_names = task_names
+    tb.add_row(scores)
+    print(tb)
+
+
 if is_torch_tpu_available():
     import torch_xla.core.xla_model as xm
     import torch_xla.debug.metrics as met
@@ -96,6 +104,7 @@ class CLTrainer(Trainer):
         ignore_keys: Optional[List[str]] = None,
         metric_key_prefix: str = "eval",
         eval_senteval_transfer: bool = False,
+        final_evaluation = False
     ) -> Dict[str, float]:
 
         # SentEval prepare and batcher
@@ -123,17 +132,59 @@ class CLTrainer(Trainer):
                                             'tenacity': 3, 'epoch_size': 2}
 
         se = senteval.engine.SE(params, batcher, prepare)
-        tasks = ['STSBenchmark', 'SICKRelatedness']
+        tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness']
         if eval_senteval_transfer or self.args.eval_transfer:
             tasks = ['STSBenchmark', 'SICKRelatedness', 'MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC']
+
+        # TAG: final test
+        if final_evaluation:
+            tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness', 'MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC']
+
         self.model.eval()
         results = se.eval(tasks)
-        
+        # print(results)
         stsb_spearman = results['STSBenchmark']['dev']['spearman'][0]
         sickr_spearman = results['SICKRelatedness']['dev']['spearman'][0]
-
+        # Tag: During training, report the evaluation result on the dev set of STSBenchmark and SICKRelatedness.
         metrics = {"eval_stsb_spearman": stsb_spearman, "eval_sickr_spearman": sickr_spearman, "eval_avg_sts": (stsb_spearman + sickr_spearman) / 2} 
-        if eval_senteval_transfer or self.args.eval_transfer:
+        
+        #############################
+        # Tag: evaluate all results, the same as evaluation.py, full mode.
+        if final_evaluation:
+            task_names = []
+            scores = []
+            for task in ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness']:
+                task_names.append(task)
+                if task in results:
+                    if task in ['STS12', 'STS13', 'STS14', 'STS15', 'STS16']:
+                        scores.append("%.2f" % (results[task]['all']['spearman']['all'] * 100))
+                        metrics['test_sts_{}'.format(task)] = "%.2f" % (results[task]['all']['spearman']['all'] * 100)
+                    else:
+                        scores.append("%.2f" % (results[task]['test']['spearman'].correlation * 100))
+                        metrics['test_sts_{}'.format(task)] = "%.2f" % (results[task]['test']['spearman'].correlation * 100)
+                else:
+                    scores.append("0.00")
+            task_names.append("Avg.")
+            scores.append("%.2f" % (sum([float(score) for score in scores]) / len(scores)))
+            metrics['test_sts_avg'] = "%.2f" % (sum([float(score) for score in scores]) / len(scores))
+            print_table(task_names, scores)
+
+            task_names = []
+            scores = []
+            for task in ['MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC']:
+                task_names.append(task)
+                if task in results:
+                    scores.append("%.2f" % (results[task]['acc']))
+                    metrics['test_transfer_{}'.format(task)] = "%.2f" % (results[task]['acc'])
+                else:
+                    scores.append("0.00")
+            task_names.append("Avg.")
+            scores.append("%.2f" % (sum([float(score) for score in scores]) / len(scores)))
+            metrics['test_transfer_avg'] = "%.2f" % (sum([float(score) for score in scores]) / len(scores))
+            print_table(task_names, scores)
+        #########################
+
+        elif eval_senteval_transfer or self.args.eval_transfer:
             avg_transfer = 0
             for task in ['MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC']:
                 avg_transfer += results[task]['devacc']
@@ -432,6 +483,7 @@ class CLTrainer(Trainer):
                 # We just need to begin an iteration to create the randomization of the sampler.
                 for _ in train_dataloader:
                     break
+        # Tag: Main training snippet
         for epoch in range(epochs_trained, num_train_epochs):
             if isinstance(train_dataloader, DataLoader) and isinstance(train_dataloader.sampler, DistributedSampler):
                 train_dataloader.sampler.set_epoch(epoch)
