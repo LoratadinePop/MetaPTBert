@@ -10,7 +10,8 @@ import json
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", type=str, help="Path of SimCSE checkpoint folder")
+    parser.add_argument("--path", type=str, help="Path of SimCSE checkpoint folder", 
+    default="result/bert-base-upsup-SimCSE")
     args = parser.parse_args()
 
     print("SimCSE checkpoint -> Huggingface checkpoint for {}".format(args.path))

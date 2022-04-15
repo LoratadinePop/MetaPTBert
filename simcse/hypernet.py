@@ -1,12 +1,9 @@
 """
     Defines the output class for the MetaPrefixEncoder's parameters.
 """
-from audioop import bias
-from matplotlib.font_manager import _Weight
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
-
 
 @dataclass
 class LinearWeight:
@@ -29,18 +26,19 @@ class BaseHyperNet(nn.Module):
         super(BaseHyperNet, self).__init__()
         self.input_dim = kwargs["input_dim"]
         self.output_dim = kwargs["output_dim"]
-        self.weight_generator = nn.Linear(self.input_dim, self.input_dim * self.output_dim)
-        self.bias_generator = nn.Linear(self.input_dim, self.output_dim)
+        self.embedding_dim = kwargs["embedding_dim"] # the dimension of HyperNet's input
+        self.weight_generator = nn.Linear(self.embedding_dim, self.input_dim * self.output_dim)
+        self.bias_generator = nn.Linear(self.embedding_dim, self.output_dim)
     
     def forward(self, embeddings):
-        weight = self.weight_generator(embeddings).view(self.input_dim, self.output_dim)
+        weight = self.weight_generator(embeddings).view(self.output_dim, self.input_dim)
         bias = self.bias_generator(embeddings).view(-1)
         return LinearWeight(weight=weight, bias=bias)
 
 class MetaPrefixEncoderHyperNet(nn.Module):
     """
-        This module generates the weights for meta prefix encoder
-        given the meta embeddings.
+        This module generates the weights for layer-wise meta prefix encoder
+        given the layer embeddings.
     """
 
     def __init__(self, **kwargs):
@@ -48,5 +46,13 @@ class MetaPrefixEncoderHyperNet(nn.Module):
         self.input_dim = kwargs["input_dim"]
         self.hidden_dim = kwargs["hidden_dim"]
         self.output_dim = kwargs["output_dim"]
-        # Todo: Layer-instance-wise layer_embedding, input avg. embeddings
-        # or just 
+        self.embedding_dim = kwargs["embedding_dim"]
+        # Generate the weights for the down projector of MetaPrefixEncoder
+        self.down_hypernet = BaseHyperNet(input_dim=self.input_dim, output_dim=self.hidden_dim, embedding_dim=self.embedding_dim)
+        # Generate the weights for the up projector of MetaPrefixEncoder
+        self.up_hypernet = BaseHyperNet(input_dim=self.hidden_dim, output_dim=self.output_dim, embedding_dim=self.embedding_dim)
+        
+    def forward(self, layer_embeddings):
+        down = self.down_hypernet(layer_embeddings)
+        up = self.up_hypernet(layer_embeddings)
+        return MetaPrefixEncoderWeight(down_projection=down, up_projection=up)

@@ -33,7 +33,7 @@ def print_table(task_names, scores):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name_or_path", type=str, default="result/bert-base-uncased_SimCSE_baseline", 
+    parser.add_argument("--model_name_or_path", type=str, default="result/bert-base-upsup-SimCSE", 
             help="Transformers' model name or path")
     parser.add_argument("--pooler", type=str, 
             choices=['cls', 'cls_before_pooler', 'avg', 'avg_top2', 'avg_first_last'], 
@@ -45,7 +45,7 @@ def main():
             help="What evaluation mode to use (dev: fast mode, dev results; test: full mode, test results); fasttest: fast mode, test results")
     parser.add_argument("--task_set", type=str, 
             choices=['sts', 'transfer', 'full', 'na'],
-            default='full',
+            default='sts',
             help="What set of tasks to evaluate on. If not 'na', this will override '--tasks'")
     parser.add_argument("--tasks", type=str, nargs='+', 
             default=['STS12', 'STS13', 'STS14', 'STS15', 'STS16',

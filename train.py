@@ -100,7 +100,7 @@ class ModelArguments:
             "help": "Will use prefix-tuning during training"
         }
     )
-    # Todo: Using a hypernetwork to generate the meta-prefix encoder's weights.
+    # Done: Using a hypernetwork to generate the meta-prefix encoder's weights.
     hyper_prefix: bool = field(
         default=False,
         metadata={
@@ -443,8 +443,8 @@ def main():
                 model_args=model_args                  
             )
         elif 'bert' in model_args.model_name_or_path:
-            # Todo: Change Bert to PrefixBert
-            model = BertForCL.from_pretrained(
+            # Done: Change Bert to PrefixBert
+            model = PrefixBertForCL.from_pretrained(
                 model_args.model_name_or_path,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
                 config=config,
@@ -463,9 +463,10 @@ def main():
             for name, param in model.named_parameters():
                 for f in freeze_layers:
                     if f in name:
-                        print(f"{name} is frozen.")
+                        # print(f"{name} is frozen.")
                         param.requires_grad = False
                         break
+                print(name, param.requires_grad)
     else:
         raise NotImplementedError
         logger.info("Training new model from scratch")

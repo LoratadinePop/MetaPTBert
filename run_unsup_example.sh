@@ -7,13 +7,12 @@
 # NUM_GPU=4
 # PORT_ID=$(expr $RANDOM + 1000)
 # export OMP_NUM_THREADS=8
-export CUDA_VISIBLE_DEVICES=2
 
 
 # python train.py \
 #     --model_name_or_path bert-base-uncased \
 #     --train_file data/wiki1m_for_simcse.txt \
-#     --output_dir result/my-unsup-simcse-bert-base-uncased \
+#     --output_dir result/bert-base-upsup-SimCSE \
 #     --num_train_epochs 1 \
 #     --per_device_train_batch_size 64 \
 #     --learning_rate 3e-5 \
@@ -31,22 +30,24 @@ export CUDA_VISIBLE_DEVICES=2
 #     --fp16 \
 #     "$@"
 
+export CUDA_VISIBLE_DEVICES=7
 
 python train.py \
     --model_name_or_path bert-base-uncased \
     --train_file data/wiki1m_for_simcse.txt \
-    --output_dir result/bert-base-frozen-nolayerwise-42-lr_3e-3-prelen_12 \
+    --output_dir result/bert-base-hyper-layer-frozen-lr_5e-3-prelen_8-seed42 \
     --seed 42 \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 128 \
-    --learning_rate 3e-3 \
+    --per_device_train_batch_size 64 \
+    --learning_rate 5e-3 \
     --frozen \
-    --meta_prefix \
-    --pre_seq_len 10 \
+    --hyper_prefix \
+    --layer_wise \
+    --pre_seq_len 8 \
     --meta_embed_size 512 \
-    --layer_embed_size 128 \
+    --layer_embed_size 2 \
     --meta_hidden_size 512 \
-    --prefix_hidden_size 512 \
+    --prefix_hidden_size 2 \
     --max_seq_length 32 \
     --evaluation_strategy steps \
     --metric_for_best_model stsb_spearman \
