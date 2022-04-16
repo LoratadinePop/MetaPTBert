@@ -16,6 +16,7 @@
 """PyTorch BERT model. """
 
 
+from logging import exception
 import math
 import os
 import warnings
@@ -50,11 +51,10 @@ from ...modeling_utils import (
     PreTrainedModel,
     apply_chunking_to_forward,
     find_pruneable_heads_and_indices,
-    prune_linear_layer,
+    prune_linear_layer
 )
 from ...utils import logging
 from .configuration_bert import BertConfig
-
 
 logger = logging.get_logger(__name__)
 
@@ -527,7 +527,8 @@ class BertEncoder(nn.Module):
         output_attentions=False,
         output_hidden_states=False,
         return_dict=True,
-        model_call_this_method=None # the model which invoke this method
+        model_call_this_method=None, # the model which invoke this method
+        attention_mask_before_convert=None
     ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -535,25 +536,13 @@ class BertEncoder(nn.Module):
 
         next_decoder_cache = () if use_cache else None
 
-        ##########################################
-        if model_call_this_method is not None and model_call_this_method.hyper_prefix:
-            old_attention_mask = attention_mask # [128, 1, 1, 32]
-            prefix_attention_mask = torch.ones(hidden_states.shape[0], model_call_this_method.model_args.pre_seq_len).to(hidden_states.device)
-            prefix_attention_mask = torch.cat((prefix_attention_mask.view([prefix_attention_mask.shape[0], 1, 1, prefix_attention_mask.shape[-1]]), old_attention_mask), dim=3)
-            attention_mask = prefix_attention_mask
-            old_attention_mask = old_attention_mask.view([old_attention_mask.shape[0], old_attention_mask.shape[-1]]) # [128, 32]
-        ##########################################
-
         for i, layer_module in enumerate(self.layer):
-            # print("transformer hidden_states", hidden_states.shape)
-            # print("transformer attention_mask", attention_mask.shape)
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             layer_head_mask = head_mask[i] if head_mask is not None else None
             # past_key_value shape: [2(key + value), bs, num_heads, seq_len, embed_size_per_head]
             past_key_value = past_key_values[i] if past_key_values is not None else None
-            # print("transformer past_key_value", past_key_value.shape) if past_key_value is not None else print("prefix NULL")
 
             #######################################
             """
@@ -563,11 +552,13 @@ class BertEncoder(nn.Module):
             """
             # #TAG: Modify huggingface transformers source code to implement Hypernetwork 
             if model_call_this_method is not None and model_call_this_method.hyper_prefix:
-                # print(f"{i} hidden_states", hidden_states.shape)
-                avg_hidden_states = (hidden_states * old_attention_mask.unsqueeze(-1)).sum(1) / old_attention_mask.sum(-1).unsqueeze(-1)
+                # Note that attention_mask is converted to -inf, while attention_mask_before_convert is the original attention_mask not concated with prefix_attention_mask
+                avg_hidden_states = (hidden_states * attention_mask_before_convert.unsqueeze(-1)).sum(1) / attention_mask_before_convert.sum(-1).unsqueeze(-1)
                 # print(f"{i} avg_hidden_states", avg_hidden_states.shape)
 
                 if model_call_this_method.model_args.layer_wise:
+                    # Bug: CUDA out of Memory!
+                    # Todo: Need a parameter efficient implementation: Decompose it to layer-and-attention_head-wise
                     # use a hypernetwork to generate the prefix_encoder's weight of each layer given layer embeddings
                     layer_embedding = model_call_this_method.layer_embeddings(torch.LongTensor([i]).to(model_call_this_method.device)).view(-1)
                     prefix_encoder_weight = model_call_this_method.hyper_prefix_encoder(layer_embedding)
@@ -586,7 +577,16 @@ class BertEncoder(nn.Module):
                     # use a layer specific prefix encoder to generate each layer's prefix
                     prefix_encoder = model_call_this_method.layer_prefix_encoder[i].to(avg_hidden_states.device)
                     past_key_value = prefix_encoder(avg_hidden_states)
-                # print(f"{i} past_key_value", past_key_value.shape)
+
+                # Debug: Identify NaN Error
+                if torch.any(torch.isnan(past_key_value)):
+                    print("pkv", past_key_value)
+                    if torch.any(torch.isnan(hidden_states)):
+                        print("hidden_state", print(avg_hidden_states))
+                    if torch.any(torch.isnan(avg_hidden_states)):
+                        print("avg hidden", avg_hidden_states)
+                    raise exception("NaN")
+
                 past_key_value = past_key_value.view(
                     hidden_states.shape[0],
                     model_call_this_method.model_args.pre_seq_len,
@@ -595,8 +595,7 @@ class BertEncoder(nn.Module):
                     self.config.hidden_size // self.config.num_attention_heads
                 )
                 past_key_value = nn.functional.dropout(past_key_value, p=self.config.hidden_dropout_prob)
-                past_key_value = past_key_value.permute([2, 0, 3, 1, 4])
-                # print(f"{i} past_key_value permute", past_key_value.shape)
+                past_key_value = past_key_value.permute([2, 0, 3, 1, 4]) # [2, bs, num_heads, seq_len, embed_size_per_head]
             #######################################
 
             if getattr(self.config, "gradient_checkpointing", False):
@@ -990,7 +989,19 @@ class BertModel(BertPreTrainedModel):
 
         # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
         # ourselves in which case we just need to make it broadcastable to all heads.
+        
+
+        ##########################################
+        if model_call_this_method is not None and model_call_this_method.hyper_prefix:
+            # The attention_mask here is composed of 0 and 1, not been converted.
+            old_attention_mask = attention_mask # [128, 1, 1, 32]
+            prefix_attention_mask = torch.ones((input_ids.shape[0], model_call_this_method.model_args.pre_seq_len), device=device)
+            attention_mask = torch.cat((prefix_attention_mask, old_attention_mask), dim=1)
+        ##########################################
+
+        # This line of code convert attention_mask filled with 0 and 1 to -inf
         extended_attention_mask: torch.Tensor = self.get_extended_attention_mask(attention_mask, input_shape, device)
+        
 
         # If a 2D or 3D attention mask is provided for the cross-attention
         # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
@@ -1028,7 +1039,8 @@ class BertModel(BertPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
-            model_call_this_method=model_call_this_method #TAG
+            model_call_this_method=model_call_this_method, #TAG
+            attention_mask_before_convert=old_attention_mask,
         )
         sequence_output = encoder_outputs[0]
         pooled_output = self.pooler(sequence_output) if self.pooler is not None else None

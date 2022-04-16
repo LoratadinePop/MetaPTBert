@@ -140,7 +140,7 @@ def cl_forward(
     # transform the batch_size, 2, len to batch_size * num_sent, len, which is the format encoder can process
     # Flatten input for encoding
     input_ids = input_ids.view((-1, input_ids.size(-1))) # (bs * num_sent, len) [sent0.0, sent0.1, sent1.0, sent1.1 ...]
-    attention_mask = attention_mask.view((-1, attention_mask.size(-1))) # (bs * num_sent len)
+    attention_mask = attention_mask.view((-1, attention_mask.size(-1))) # (bs * num_sent len) 这里的mask还是0和1
     if token_type_ids is not None:
         token_type_ids = token_type_ids.view((-1, token_type_ids.size(-1))) # (bs * num_sent, len)
 
@@ -182,11 +182,9 @@ def cl_forward(
         past_key_values=past_key_values,
         model_call_this_method=cls,
     )
-
     # Pooling
     pooler_output = cls.pooler(attention_mask, outputs)
     pooler_output = pooler_output.view((batch_size, num_sent, pooler_output.size(-1))) # (bs, num_sent, hidden)
-
     # If using "cls", we add an extra MLP layer
     # (same as BERT's original implementation) over the representation.
     if cls.pooler_type == "cls":
@@ -194,7 +192,8 @@ def cl_forward(
 
     # Separate representation
     z1, z2 = pooler_output[:,0], pooler_output[:,1]
-
+    # print(z1[0], z2[0])
+    # print(z1[1], z2[1])
     # Hard negative
     if num_sent == 3:
         z3 = pooler_output[:, 2]
@@ -380,14 +379,15 @@ class PrefixBertForCL(BertPreTrainedModel):
                                             embedding_dim=self.model_args.layer_embed_size)
             else:
                 # a unique encoder for each layer
-                self.layer_prefix_encoder = [
+                self.layer_prefix_encoder = nn.ModuleList([
                     nn.Sequential(
                         nn.Linear(self.config.hidden_size, self.model_args.prefix_hidden_size),
-                        nn.ReLU(),
+                        nn.Tanh(),
                         nn.Linear(self.model_args.prefix_hidden_size, self.config.hidden_size * self.model_args.pre_seq_len * 2)
                     )
                     for _ in range(self.config.num_hidden_layers)
-                ]
+                ])
+
         cl_init(self, self.config)
 
     def forward(

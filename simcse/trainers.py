@@ -515,6 +515,8 @@ class CLTrainer(Trainer):
                         tr_loss += self.training_step(model, inputs)
                 else:
                     tr_loss += self.training_step(model, inputs)
+                if torch.any(torch.isnan(tr_loss)):
+                    print("tr_loss", tr_loss)
                 self._total_flos += self.floating_point_ops(inputs)
 
                 if (step + 1) % self.args.gradient_accumulation_steps == 0 or (

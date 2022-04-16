@@ -30,24 +30,23 @@
 #     --fp16 \
 #     "$@"
 
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=0
 
 python train.py \
     --model_name_or_path bert-base-uncased \
     --train_file data/wiki1m_for_simcse.txt \
-    --output_dir result/bert-base-hyper-layer-frozen-lr_5e-3-prelen_8-seed42 \
+    --output_dir result/bert-base-hyper-frozen-lr_1e-3epoch2-prelen_10-seed42 \
     --seed 42 \
-    --num_train_epochs 1 \
-    --per_device_train_batch_size 64 \
-    --learning_rate 5e-3 \
+    --num_train_epochs 2 \
+    --per_device_train_batch_size 128 \
+    --learning_rate 1e-3 \
     --frozen \
     --hyper_prefix \
-    --layer_wise \
-    --pre_seq_len 8 \
+    --pre_seq_len 10 \
     --meta_embed_size 512 \
-    --layer_embed_size 2 \
+    --layer_embed_size 32 \
     --meta_hidden_size 512 \
-    --prefix_hidden_size 2 \
+    --prefix_hidden_size 512 \
     --max_seq_length 32 \
     --evaluation_strategy steps \
     --metric_for_best_model stsb_spearman \

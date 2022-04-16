@@ -459,14 +459,22 @@ def main():
         else:
             raise NotImplementedError
         if model_args.frozen:
+            param_num = 0
+            frozen_param_num = 0
             freeze_layers = ["bert", "roberta"]
             for name, param in model.named_parameters():
+                param_num += param.numel()
                 for f in freeze_layers:
                     if f in name:
                         # print(f"{name} is frozen.")
                         param.requires_grad = False
+                        frozen_param_num += param.numel()
                         break
-                print(name, param.requires_grad)
+                print(name, param.requires_grad, param.numel(), param.shape)
+            print("##############################")
+            print(f"Totoal param num: {param_num}, BERT param num: {frozen_param_num}, Trainable param num: {param_num - frozen_param_num}")
+            print(f"The new-added trainable parameters are {(param_num-frozen_param_num)/frozen_param_num*100:.2f}%")
+            print("##############################")
     else:
         raise NotImplementedError
         logger.info("Training new model from scratch")

@@ -32,13 +32,13 @@ class MetaPrefixEncoder(torch.nn.Module):
         # Tag: This MetaEmbedEncoder doesn't needed to be parameterize by HyperNetworks.
         self.MetaEmbedEncoder = torch.nn.Sequential(
             torch.nn.Linear(config.hidden_size + self.model_args.layer_embed_size if self.model_args.layer_wise else config.hidden_size, self.model_args.meta_hidden_size),
-            torch.nn.ReLU(),
+            torch.nn.Tanh(),
             torch.nn.Linear(self.model_args.meta_hidden_size,  self.model_args.meta_embed_size)
         )
         # meta prefix encoder, input: meta embedding
         self.MetaPrefixEncoder = torch.nn.Sequential(
             torch.nn.Linear(self.model_args.meta_embed_size, self.model_args.prefix_hidden_size),
-            torch.nn.ReLU(), #or Tanh()
+            torch.nn.Tanh(), #or Tanh()
             torch.nn.Linear(self.model_args.prefix_hidden_size, 2 * config.hidden_size * self.model_args.pre_seq_len 
             if self.model_args.layer_wise else 2 * config.hidden_size * config.num_hidden_layers * self.model_args.pre_seq_len)
         )
