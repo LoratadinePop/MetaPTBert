@@ -19,13 +19,15 @@
 from logging import exception
 import math
 import os
+from pyexpat import model
 import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple
+from regex import E
 
 import torch
 import torch.utils.checkpoint
-from torch import nn
+from torch import device, nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
 from ...activations import ACT2FN
@@ -530,12 +532,13 @@ class BertEncoder(nn.Module):
         model_call_this_method=None, # the model which invoke this method
         attention_mask_before_convert=None
     ):
+        import time
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
 
         next_decoder_cache = () if use_cache else None
-
+        # start_layer = time.time()
         for i, layer_module in enumerate(self.layer):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
@@ -544,39 +547,128 @@ class BertEncoder(nn.Module):
             # past_key_value shape: [2(key + value), bs, num_heads, seq_len, embed_size_per_head]
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            #######################################
+            #############################################################
+            # #TAG: Modify huggingface transformers source code to implement Hypernetwork 
             """
                 Implement HyperPrefix.
                 All the operations, including calculating past_key_value and attention_mask
                 are gathered here. Do not need to declare in other places.
             """
-            # #TAG: Modify huggingface transformers source code to implement Hypernetwork 
             if model_call_this_method is not None and model_call_this_method.hyper_prefix:
-                # Note that attention_mask is converted to -inf, while attention_mask_before_convert is the original attention_mask not concated with prefix_attention_mask
+                # Note: that attention_mask is converted to -inf, while attention_mask_before_convert 
+                # is the original attention_mask which not concated with prefix_attention_mask composed of 0 & 1
                 avg_hidden_states = (hidden_states * attention_mask_before_convert.unsqueeze(-1)).sum(1) / attention_mask_before_convert.sum(-1).unsqueeze(-1)
-                # print(f"{i} avg_hidden_states", avg_hidden_states.shape)
 
                 if model_call_this_method.model_args.layer_wise:
-                    # Bug: CUDA out of Memory!
-                    # Todo: Need a parameter efficient implementation: Decompose it to layer-and-attention_head-wise
+                    device = model_call_this_method.device
+                    # FIXED: CUDA out of Memory!
+                    # DONE: Need a parameter efficient implementation: Decompose it to layer-and-attention_head-wise
                     # use a hypernetwork to generate the prefix_encoder's weight of each layer given layer embeddings
-                    layer_embedding = model_call_this_method.layer_embeddings(torch.LongTensor([i]).to(model_call_this_method.device)).view(-1)
-                    prefix_encoder_weight = model_call_this_method.hyper_prefix_encoder(layer_embedding)
-                    hidden_prefix = nn.functional.linear(
-                        avg_hidden_states,
-                        prefix_encoder_weight.down_projection.weight,
-                        bias=prefix_encoder_weight.down_projection.bias
+                    layer_embedding = model_call_this_method.layer_embedding(torch.LongTensor([i]).to(device)).view(-1) # [1, 32] -> [32]
+                    attn_head_embeddings = model_call_this_method.attention_head_embedding(torch.LongTensor(torch.arange(self.config.num_attention_heads)).to(device)) #[12, 32]
+                    # prefix_type_embedding = model_call_this_method.prefix_type_embedding(torch.LongTensor(torch.arange(2)).to(device)) # [2, 32]
+                    prefix_position_embedding = model_call_this_method.prefix_position_embedding(torch.LongTensor(torch.arange(model_call_this_method.model_args.pre_seq_len)).to(device)) #[seq_len, 32]
+                    # DONE: how to batch it?
+                    # WARNING: prefix_seq FIRST rather than attention_head
+                    pre_seq_len = model_call_this_method.model_args.pre_seq_len
+                    meta_embedding = None
+                    for head_embed in attn_head_embeddings:
+                        head_meta_embed = torch.cat(
+                            (
+                                layer_embedding.expand(pre_seq_len, layer_embedding.shape[-1]),
+                                head_embed.unsqueeze(0).expand(pre_seq_len, head_embed.shape[-1]),
+                                prefix_position_embedding
+                            ), dim=-1
+                        )
+                        if meta_embedding is None:
+                            meta_embedding = head_meta_embed
+                            # [8, 96]
+                        else:
+                            meta_embedding = torch.cat((meta_embedding, head_meta_embed), dim=0) #[8 * 12, 96]
+                    meta_embedding = model_call_this_method.hyper_embed_merger(meta_embedding) #[seq_len * head_nums, embed_size]
+                    down_weight, down_bias, up_weight, up_bias = model_call_this_method.hyper_prefix_encoder(meta_embedding)
+                    down_weight = down_weight.view(
+                        down_weight.shape[0],
+                        model_call_this_method.hyper_prefix_encoder.input_dim,
+                        model_call_this_method.hyper_prefix_encoder.hidden_dim
                     )
-                    # print(f"{i} hidden_prefix", hidden_prefix.shape)
-                    past_key_value = nn.functional.linear(
-                        hidden_prefix,
-                        prefix_encoder_weight.up_projection.weight,
-                        bias=prefix_encoder_weight.up_projection.bias
+                    up_weight = up_weight.view(
+                        up_weight.shape[0],
+                        model_call_this_method.hyper_prefix_encoder.hidden_dim,
+                        model_call_this_method.hyper_prefix_encoder.output_dim
                     )
+                    # [96, 256, 64]
+                    prefix_hidden_state = torch.matmul(avg_hidden_states, down_weight) + down_bias.unsqueeze(1).expand([down_bias.shape[0], avg_hidden_states.shape[0], down_bias.shape[-1]])
+                    # [96, 256, 64]
+                    prefix_output_state = torch.matmul(prefix_hidden_state, up_weight) + up_bias.unsqueeze(1).expand([up_bias.shape[0], avg_hidden_states.shape[0], up_bias.shape[-1]])
+                    past_key_value = prefix_output_state.permute([1, 0, 2]) # [256, 96, 64*2]
+                    # [bs, head_num, seq_len, 2, head_dim]
+                    past_key_value = past_key_value.view([avg_hidden_states.shape[0], self.config.num_attention_heads, pre_seq_len, 2, self.config.hidden_size // self.config.num_attention_heads])
+                    past_key_value = nn.functional.dropout(past_key_value, p=self.config.hidden_dropout_prob)
+                    past_key_value = past_key_value.permute([3, 0, 1, 2, 4])
+                    # FIXME: Slow training! #FIXED: Use manual matmul()
+                    # for prefix_position in prefix_position_embedding:
+                    #     past_key_value_position = None
+                    #     layer_head_position_hyperinput = torch.cat(
+                    #         (
+                    #             layer_embedding.expand(attn_head_embeddings.shape[0], layer_embedding.shape[-1]),
+                    #             attn_head_embeddings,
+                    #             prefix_position.expand(attn_head_embeddings.shape[0], prefix_position.shape[-1])
+                    #         ),
+                    #         dim=-1
+                    #     )
+                    #     layer_head_position_hyperinput = model_call_this_method.hyper_embed_merger(layer_head_position_hyperinput)
+                    #     down_weight, down_bias, up_weight, up_bias = model_call_this_method.hyper_prefix_encoder(layer_head_position_hyperinput)
+                    #     down_weight = down_weight.view(layer_head_position_hyperinput.shape[0], model_call_this_method.hyper_prefix_encoder.input_dim, model_call_this_method.hyper_prefix_encoder.hidden_dim)
+                    #     up_weight = up_weight.view(layer_head_position_hyperinput.shape[0], model_call_this_method.hyper_prefix_encoder.hidden_dim, model_call_this_method.hyper_prefix_encoder.output_dim)
+                    #     middle_state= torch.matmul(avg_hidden_states, down_weight) + down_bias.unsqueeze(1).expand([down_bias.shape[0], avg_hidden_states.shape[0], down_bias.shape[-1]]) # [12,768,64]
+                    #     final_state = torch.matmul(middle_state, up_weight) + up_bias.unsqueeze(1).expand([up_bias.shape[0], avg_hidden_states.shape[0], up_bias.shape[-1]]) # [12,128,64]
+                    #     final_state = final_state.permute([1, 0, 2]).reshape(hidden_states.shape[0], 1, 2, self.config.num_attention_heads, self.config.hidden_size // self.config.num_attention_heads)
+                    #     # FIXME: Refactor it to support parallel computing.
+                    #     # for head in layer_head_position_hyperinput:
+                    #     #     head = model_call_this_method.hyper_embed_merger(head)
+                    #     #     prefix_encoder_weight = model_call_this_method.hyper_prefix_encoder(head)
+                    #     #     hidden_prefix = nn.functional.linear(
+                    #     #         avg_hidden_states,
+                    #     #         prefix_encoder_weight.down_projection.weight,
+                    #     #         bias=prefix_encoder_weight.down_projection.bias
+                    #     #     )
+                    #     #     past_key_value_head = nn.functional.linear(
+                    #     #         hidden_prefix,
+                    #     #         prefix_encoder_weight.up_projection.weight,
+                    #     #         bias=prefix_encoder_weight.up_projection.bias
+                    #     #     )
+                    #     #     past_key_value_head = past_key_value_head.view(
+                    #     #         hidden_states.shape[0],
+                    #     #         1,
+                    #     #         2,
+                    #     #         1,
+                    #     #         self.config.hidden_size // self.config.num_attention_heads
+                    #     #     )
+                    #     #     if past_key_value_position is None:
+                    #     #         past_key_value_position = past_key_value_head
+                    #     #     else:
+                    #     #         past_key_value_position = torch.cat((past_key_value_position, past_key_value_head), dim=3)
+                        
+
+                    #     # print("head", time.time() - start_head)
+                    #     if past_key_value is None:
+                    #         past_key_value = final_state
+                    #     else:
+                    #         past_key_value = torch.cat((past_key_value, final_state), dim=1)
                 else:
                     # use a layer specific prefix encoder to generate each layer's prefix
-                    prefix_encoder = model_call_this_method.layer_prefix_encoder[i].to(avg_hidden_states.device)
+                    prefix_encoder = model_call_this_method.layer_prefix_encoder[i].to(device)
                     past_key_value = prefix_encoder(avg_hidden_states)
+                    past_key_value = past_key_value.view(
+                        hidden_states.shape[0],
+                        model_call_this_method.model_args.pre_seq_len,
+                        2,
+                        self.config.num_attention_heads,
+                        self.config.hidden_size // self.config.num_attention_heads
+                    )
+                    past_key_value = nn.functional.dropout(past_key_value, p=self.config.hidden_dropout_prob)
+                    past_key_value = past_key_value.permute([2, 0, 3, 1, 4]) # [2, bs, num_heads, seq_len, embed_size_per_head]
 
                 # Debug: Identify NaN Error
                 if torch.any(torch.isnan(past_key_value)):
@@ -586,17 +678,7 @@ class BertEncoder(nn.Module):
                     if torch.any(torch.isnan(avg_hidden_states)):
                         print("avg hidden", avg_hidden_states)
                     raise exception("NaN")
-
-                past_key_value = past_key_value.view(
-                    hidden_states.shape[0],
-                    model_call_this_method.model_args.pre_seq_len,
-                    2,
-                    self.config.num_attention_heads,
-                    self.config.hidden_size // self.config.num_attention_heads
-                )
-                past_key_value = nn.functional.dropout(past_key_value, p=self.config.hidden_dropout_prob)
-                past_key_value = past_key_value.permute([2, 0, 3, 1, 4]) # [2, bs, num_heads, seq_len, embed_size_per_head]
-            #######################################
+            #############################################################
 
             if getattr(self.config, "gradient_checkpointing", False):
 
@@ -632,7 +714,7 @@ class BertEncoder(nn.Module):
                 all_self_attentions = all_self_attentions + (layer_outputs[1],)
                 if self.config.add_cross_attention:
                     all_cross_attentions = all_cross_attentions + (layer_outputs[2],)
-
+        # print("layer", time.time()-start_layer)
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
 
@@ -991,13 +1073,13 @@ class BertModel(BertPreTrainedModel):
         # ourselves in which case we just need to make it broadcastable to all heads.
         
 
-        ##########################################
+        #############################################################
         if model_call_this_method is not None and model_call_this_method.hyper_prefix:
             # The attention_mask here is composed of 0 and 1, not been converted.
             old_attention_mask = attention_mask # [128, 1, 1, 32]
             prefix_attention_mask = torch.ones((input_ids.shape[0], model_call_this_method.model_args.pre_seq_len), device=device)
             attention_mask = torch.cat((prefix_attention_mask, old_attention_mask), dim=1)
-        ##########################################
+        #############################################################
 
         # This line of code convert attention_mask filled with 0 and 1 to -inf
         extended_attention_mask: torch.Tensor = self.get_extended_attention_mask(attention_mask, input_shape, device)

@@ -19,7 +19,7 @@ from transformers.file_utils import (
     replace_return_docstrings,
 )
 from transformers.modeling_outputs import SequenceClassifierOutput, BaseModelOutputWithPoolingAndCrossAttentions
-from simcse.hypernet import MetaPrefixEncoderHyperNet
+from simcse.hypernet import MetaPrefixEncoderHyperNet, MetaPrefixEncoderHyperNetMatMul
 from simcse.prefix_encoder import PrefixEncoder, get_prefix, MetaPrefixEncoder
 
 class MLPLayer(nn.Module):
@@ -371,14 +371,42 @@ class PrefixBertForCL(BertPreTrainedModel):
         """
         if self.hyper_prefix:
             if self.model_args.layer_wise:
-                self.layer_embeddings = nn.Embedding(self.config.num_hidden_layers, self.model_args.layer_embed_size)
-                self.hyper_prefix_encoder = MetaPrefixEncoderHyperNet(
-                                            input_dim=self.config.hidden_size, 
-                                            hidden_dim=self.model_args.prefix_hidden_size, 
-                                            output_dim=self.config.hidden_size * self.model_args.pre_seq_len * 2, # pre_seq_len * ( key + value )
-                                            embedding_dim=self.model_args.layer_embed_size)
+                self.layer_embedding = nn.Embedding(self.config.num_hidden_layers, self.model_args.layer_embed_size)
+                self.attention_head_embedding = nn.Embedding(self.config.num_attention_heads, self.model_args.layer_embed_size)
+                # self.prefix_type_embedding = nn.Embedding(2, self.model_args.layer_embed_size)
+                self.prefix_position_embedding = nn.Embedding(self.model_args.pre_seq_len, self.model_args.layer_embed_size)
+                # Tansform the concat of layer_embedding, attention_head_embedding, prefix_type_embedding, prefix_position_embedding to hyper_embedding as input to hypernet.
+                self.hyper_embed_merger = nn.Sequential(
+                    nn.Linear(self.model_args.layer_embed_size * 3, self.model_args.layer_embed_size),
+                    nn.ReLU(),
+                    nn.Linear(self.model_args.layer_embed_size, self.model_args.layer_embed_size)
+                )
+                # Deprecated: #FIXME: CUDA out of memory error.
+                # self.hyper_prefix_encoder = MetaPrefixEncoderHyperNet(
+                #                             input_dim=self.config.hidden_size, 
+                #                             hidden_dim=self.model_args.prefix_hidden_size, 
+                #                             output_dim=self.config.hidden_size * self.model_args.pre_seq_len * 2, # pre_seq_len * ( key + value )
+                #                             embedding_dim=self.model_args.layer_embed_size)
+
+                # Deprecated: #FIXME:Do not support batch operation.
+                # FIXED: Decompose the hypernet into layer， attention_head, prefix_position -aware
+                # self.hyper_prefix_encoder = MetaPrefixEncoderHyperNet(
+                #     input_dim=self.config.hidden_size,
+                #     hidden_dim=self.model_args.prefix_hidden_size,
+                #     output_dim=(self.config.hidden_size // self.config.num_attention_heads) * 2, # project to key and value together, do not distinguish them
+                #     embedding_dim=self.model_args.layer_embed_size
+                # )
+
+                # FIXED: Support batch parallelization.
+                self.hyper_prefix_encoder = MetaPrefixEncoderHyperNetMatMul(
+                    input_dim=self.config.hidden_size,
+                    hidden_dim=self.model_args.prefix_hidden_size,
+                    output_dim=(self.config.hidden_size // self.config.num_attention_heads) * 2, # project to key and value together, do not distinguish them
+                    embedding_dim=self.model_args.layer_embed_size
+                )
             else:
-                # a unique encoder for each layer
+                # TODO: How about a global encoder for all layers?
+                # A unique encoder for each layer
                 self.layer_prefix_encoder = nn.ModuleList([
                     nn.Sequential(
                         nn.Linear(self.config.hidden_size, self.model_args.prefix_hidden_size),

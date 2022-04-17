@@ -1,6 +1,7 @@
 """
     Defines the output class for the MetaPrefixEncoder's parameters.
 """
+from turtle import forward
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
@@ -38,7 +39,8 @@ class BaseHyperNet(nn.Module):
 class MetaPrefixEncoderHyperNet(nn.Module):
     """
         This module generates the weights for layer-wise meta prefix encoder
-        given the layer embeddings.
+        given the layer embeddings. Used in conjunction with torch.nn.linear(input, weight, bias=None),
+        thus do not support batch operation. Only ONE weight and bias can be generated once.
     """
 
     def __init__(self, **kwargs):
@@ -56,3 +58,29 @@ class MetaPrefixEncoderHyperNet(nn.Module):
         down = self.down_hypernet(layer_embeddings)
         up = self.up_hypernet(layer_embeddings)
         return MetaPrefixEncoderWeight(down_projection=down, up_projection=up)
+
+
+class MetaPrefixEncoderHyperNetMatMul(nn.Module):
+    """
+        This module directly generate weight matrix for *torch.matmul()* given the embedding.
+        Thus support parallel computing manually, as *torch.nn.functional.linear(input, weight, bias)* only support one weight and bias.
+    """
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.input_dim = kwargs["input_dim"]
+        self.hidden_dim = kwargs["hidden_dim"]
+        self.output_dim = kwargs["output_dim"]
+        self.embedding_dim = kwargs["embedding_dim"]
+        
+        self.down_weight_hypernet = nn.Linear(self.embedding_dim, self.input_dim * self.hidden_dim)
+        self.down_bias_hypernet = nn.Linear(self.embedding_dim, self.hidden_dim)
+        self.up_weight_hypernet = nn.Linear(self.embedding_dim, self.hidden_dim * self.output_dim)
+        self.up_bias_hypernet = nn.Linear(self.embedding_dim, self.output_dim)
+    
+    def forward(self, embedding):
+        return (
+            self.down_weight_hypernet(embedding),
+            self.down_bias_hypernet(embedding),
+            self.up_weight_hypernet(embedding),
+            self.up_bias_hypernet(embedding)
+        )

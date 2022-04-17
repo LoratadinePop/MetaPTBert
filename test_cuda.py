@@ -1,13 +1,12 @@
 import torch
 import torch.nn.functional as F
-
+from simcse.hypernet import MetaPrefixEncoderHyperNet
 embedding_dim = 32
 input_dim = 768
 output_dim = 768 * 2 * 8
 hidden_dim = 512
 batch_size = 256
 
-from simcse.hypernet import MetaPrefixEncoderHyperNet
 
 device = torch.device("cuda:0")
 
